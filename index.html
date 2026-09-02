@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -68,7 +69,7 @@
         import { createRoot } from 'react-dom/client';
         import { 
             Search, ChevronLeft, AlertCircle, Clock, Users, Building, FileText, 
-            Medal, Link as LinkIcon, RefreshCcw, Landmark, Calendar, UserX
+            Medal, Link as LinkIcon, RefreshCcw, Landmark
         } from 'lucide-react';
         import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, LabelList } from 'recharts';
         import Papa from 'papaparse';
@@ -76,7 +77,7 @@
         // ===========================================================================
         // CONFIGURACIÓN CENTRAL
         // ===========================================================================
-        const GOOGLE_SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSVD7RvWvdXdZFF7LTwpVjNbMoWHHii6E2WkwMBX9-6STwoE0yMWqJRRzjxikqI2K5ivaLprSMjdIKD/pub?output=csv"; 
+        const GOOGLE_SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSVD7RvWvdXdZFF7LTwpVjNbMoWHHii6E2WkwMBX9-6STwoE0yMWqJRRzjxikqI2K5ivaLprSMjdIKD/pubhtml"; 
         
         // VALORES OPERATIVOS FIJADOS
         const TARIFA_HORA = 21;
@@ -111,7 +112,11 @@
             "GEORGE MICHAEL DIAZ GOMEZ", 
             "YEFFERSON PAREDES DIAZ", 
             "LUIS FERNANDO DIAZ ROJAS", 
-            "LAURENTIU CIOBANU"
+            "LAURENTIU CIOBANU",
+            "ALEX CALERO MOYA",
+            "FRANCOAL GOMES",
+            "JUAN CARLOS RIVAS TERAN",
+            "FLAMINIO MONROY ZANABRIA"
         ];
 
         const normalizeName = (n) => (n || "")
@@ -135,6 +140,51 @@
             const d = String(dt.getDate()).padStart(2, '0');
             return `${d}/${m}/${y}`;
         };
+
+        // ===========================================================================
+        // COMPONENTE LOGO AUTODETECTABLE (ALTA FIDELIDAD)
+        // Conmuta dinámicamente entre URL absoluta (CMS AiKit) y rutas relativas
+        // según el host del entorno, con cascada anti-404 y fallback tipográfico.
+        // ===========================================================================
+        const LOGO_URL_ABSOLUTA = "https://cms.aikit.es/api/tools/threads/69fb150d178316437ac12e86/file/ENUE%20logo.png";
+        const LOGO_URL_ABSOLUTA_ALT = "https://cms.aikit.es/api/tools/threads/69fb150d178316437ac12e86/file/69fb150d178316437ac12e86_enue_logo.png";
+        const LOGO_RUTAS_RELATIVAS = ["enue_logo.png", "./enue_logo.png", "/enue_logo.png"];
+
+        function Logo({ className = "h-10 w-auto object-contain" }) {
+            const fuentes = useMemo(() => {
+                const host = (typeof window !== "undefined" && window.location && window.location.hostname) ? window.location.hostname : "";
+                const esHostAiKit = host === "" || host === "aikit.es" || host.endsWith(".aikit.es");
+                const absolutas = [LOGO_URL_ABSOLUTA, LOGO_URL_ABSOLUTA_ALT];
+                // En hosts AiKit (o iframes sin host propio) prioriza la URL absoluta del CMS;
+                // en cualquier otro dominio prioriza las rutas relativas locales.
+                return esHostAiKit ? [...absolutas, ...LOGO_RUTAS_RELATIVAS] : [...LOGO_RUTAS_RELATIVAS, ...absolutas];
+            }, []);
+            const [indiceFuente, setIndiceFuente] = useState(0);
+            const [agotadas, setAgotadas] = useState(false);
+
+            if (agotadas) {
+                return (
+                    <div className="h-10 px-3 flex items-center justify-center bg-zinc-900 text-white rounded select-none" aria-label="ENUE">
+                        <span className="font-bold text-sm tracking-[0.2em]">ENUE</span>
+                    </div>
+                );
+            }
+
+            return (
+                <img
+                    src={fuentes[indiceFuente]}
+                    alt="ENUE"
+                    className={className}
+                    onError={() => {
+                        if (indiceFuente < fuentes.length - 1) {
+                            setIndiceFuente(indiceFuente + 1);
+                        } else {
+                            setAgotadas(true);
+                        }
+                    }}
+                />
+            );
+        }
 
         function processData(csvData) {
             const result = Papa.parse(csvData, { skipEmptyLines: true });
@@ -188,48 +238,13 @@
             return dataRows.filter(r => r["fecha"] && r["nombre empleado"]).map(r => ({
                 ...r,
                 Proyecto: (!r["desc. proyecto"] || r["desc. proyecto"].trim() === '') ? "Obra no especificada" : r["desc. proyecto"].trim(),
-                Horas: parseFloat((r["horas"] || "0").replace(',', '.')) || 0,
+                Horas: parseFloat((r["horas"]||"0").replace(',', '.')) || 0,
                 Fecha: r["fecha"].trim(),
                 Empleado: r["nombre empleado"].trim(),
                 Tarea: r["desc. partida"] || "",
                 Obs: r["observ."] || r["observaciones"] || ""
             }));
         }
-
-        // Componente Inteligente para el Logo (Detección dinámica de entorno + Doble Red de Seguridad)
-        const AIKIT_LOGO_URL = "https://cms.aikit.es/api/tools/threads/69fb150d178316437ac12e86/file/69fb150d178316437ac12e86_enue_logo.png";
-        const LOCAL_LOGO_URL = "./enue_logo.png";
-
-        // Detecta si se ejecuta dentro de la plataforma AiKit (hostname 'aikit.es' o iframe sandbox)
-        const isAiKitEnvironment = () => {
-            try {
-                const host = (window.location.hostname || "").toLowerCase();
-                if (host.includes("aikit.es")) return true;
-                // Entorno sandbox: iframe con origen opaco (hostname vacío) o SDK de AiKit pre-inyectado
-                if (host === "" && window.self !== window.top) return true;
-                if (typeof window.AiKit !== "undefined") return true;
-                return false;
-            } catch (e) {
-                return true; // Ante restricciones cross-origin, asumir entorno sandbox
-            }
-        };
-
-        const Logo = () => {
-            // En AiKit usa la URL absoluta de la plataforma; en producción (Vercel/GitHub) el archivo local
-            const [imgSrc, setImgSrc] = useState(isAiKitEnvironment() ? AIKIT_LOGO_URL : LOCAL_LOGO_URL);
-            return (
-                <img 
-                    src={imgSrc} 
-                    alt="ENUE" 
-                    className="h-10 w-auto object-contain" 
-                    onError={() => {
-                        if (imgSrc !== AIKIT_LOGO_URL) {
-                            setImgSrc(AIKIT_LOGO_URL);
-                        }
-                    }}
-                />
-            );
-        };
 
         function App() {
             const [data, setData] = useState([]);
@@ -657,90 +672,72 @@
                                     <div>
                                         <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 flex items-center gap-2">
                                             <AlertCircle className="w-4.5 h-4.5 text-zinc-500" />
-                                            Faltas de Registro de Partes Semanales
+                                            Control de Incidencias de Registro
                                         </h3>
-                                        <p className="text-[10px] text-zinc-500 mt-0.5 font-medium">Control de incidencias laborables según plantilla oficial (nombres.xlsx)</p>
+                                        <p className="text-[10px] text-zinc-500 mt-0.5 font-medium">Auditoría diaria de partes de trabajo según plantilla oficial</p>
                                     </div>
                                     
                                     <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold">
                                         <span className="px-2.5 py-1 rounded bg-white border border-zinc-200 text-zinc-600">
-                                            Fechas: {minFechaData && maxFechaData ? `${dateKey(minFechaData)} — ${dateKey(maxFechaData)}` : "—"}
-                                        </span>
-                                        <span className="px-2.5 py-1 rounded bg-white border border-zinc-200 text-zinc-600">
-                                            Días Laborables: {diasLaborables.length}
-                                        </span>
-                                        <span className="px-2.5 py-1 rounded bg-white border border-zinc-200 text-zinc-600">
                                             Plantilla: {LISTA_TRABAJADORES.length}
-                                        </span>
-                                        <span className={`px-2.5 py-1 rounded border ${incidencias.length > 0 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                                            {incidencias.length} INCIDENCIAS DE REGISTRO
-                                        </span>
-                                        <span className="px-2.5 py-1 rounded border bg-red-100 text-red-800 border-red-300 shadow-sm font-bold">
-                                            DESVÍO TOTAL DE CONTROL: {formatEur(costeTotalIncidencias)}
                                         </span>
                                     </div>
                                 </div>
 
-                                <div className="p-5 bg-zinc-50/50">
-                                    {resumenFaltasList.length > 0 ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {/* Resumen Ejecutivo de Auditoría */}
+                                <div className="grid grid-cols-3 border-b border-zinc-200 bg-white">
+                                    <div className="p-4">
+                                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Plantilla Auditada</p>
+                                        <p className="text-xl font-bold text-zinc-900">{LISTA_TRABAJADORES.length} <span className="text-xs font-normal text-zinc-400">operarios</span></p>
+                                    </div>
+                                    <div className="p-4 border-l border-zinc-200">
+                                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Incidencias de Registro</p>
+                                        <p className={`text-3xl font-bold ${incidencias.length > 0 ? 'text-red-800' : 'text-zinc-900'}`}>{incidencias.length}</p>
+                                    </div>
+                                    <div className="p-4 border-l border-zinc-200">
+                                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Desvío Total de Control</p>
+                                        <p className={`text-3xl font-bold ${costeTotalIncidencias > 0 ? 'text-red-800' : 'text-zinc-900'}`}>{formatEur(costeTotalIncidencias)}</p>
+                                    </div>
+                                </div>
+
+                                {/* Listado de Incidencias en Tabla de Auditoría */}
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-zinc-50 text-zinc-500 border-b border-zinc-200 text-[10px] uppercase tracking-wider">
+                                            <tr>
+                                                <th className="p-3.5 font-semibold">Trabajador</th>
+                                                <th className="p-3.5 font-semibold">Fecha(s) sin registrar</th>
+                                                <th className="p-3.5 font-semibold text-center w-32">Nº Incidencias</th>
+                                                <th className="p-3.5 font-semibold text-right w-36">Desvío Económico</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-zinc-200/60 bg-white">
                                             {resumenFaltasList.map((item) => {
                                                 const totalDesvio = item.fechas.length * PENALIZACION_INCIDENCIA_DIA;
-                                                const tieneMuchasFaltas = item.fechas.length >= 3;
-                                                
                                                 return (
-                                                    <div 
-                                                        key={item.trabajador} 
-                                                        className={`rounded-lg border bg-white p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-3 ${
-                                                            tieneMuchasFaltas 
-                                                            ? 'border-red-200 bg-red-50/10' 
-                                                            : 'border-zinc-200 bg-white'
-                                                        }`}
-                                                    >
-                                                        {/* Cabecera Tarjeta */}
-                                                        <div className="flex items-start justify-between gap-3">
-                                                            <h4 className="font-bold text-xs text-zinc-800 uppercase tracking-wide leading-tight">{item.trabajador}</h4>
-                                                            <div className={tieneMuchasFaltas ? "text-red-500" : "text-zinc-400"}>
-                                                                <UserX className="w-4 h-4" />
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Días sin fichar */}
-                                                        <div className="flex items-baseline gap-1.5">
-                                                            <span className={`text-2xl font-bold ${tieneMuchasFaltas ? 'text-red-600' : 'text-zinc-900'}`}>{item.fechas.length}</span>
-                                                            <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">
-                                                                {item.fechas.length === 1 ? 'día incompleto' : 'días incompletos'}
-                                                            </span>
-                                                        </div>
-
-                                                        {/* Lista de fechas */}
-                                                        <div className="text-xs text-zinc-600 leading-relaxed min-h-[1.5rem]">
-                                                            <span className="text-[9px] text-zinc-400 block uppercase tracking-wider mb-0.5">Fechas afectadas:</span>
-                                                            {item.fechas.join(', ')}
-                                                        </div>
-
-                                                        {/* Desvío Financiero (Rojo Sóbrio) */}
-                                                        <div className="mt-auto pt-3 border-t border-zinc-100 flex items-center justify-between text-xs">
-                                                            <span className="text-zinc-500 text-[10px] uppercase tracking-wider">Desvío Económico:</span>
-                                                            <span className="font-bold text-red-600 bg-red-50 border border-red-100 px-2.5 py-0.5 rounded text-xs shadow-sm">
-                                                                {formatEur(totalDesvio)}
-                                                            </span>
-                                                        </div>
-                                                    </div>
+                                                    <tr key={item.trabajador} className="hover:bg-zinc-50/50 transition-colors">
+                                                        <td className="p-3.5 font-semibold text-zinc-900">{item.trabajador}</td>
+                                                        <td className="p-3.5 text-red-800 font-semibold">{item.fechas.join(", ")}</td>
+                                                        <td className="p-3.5 text-center font-bold text-lg text-red-800">{item.fechas.length}</td>
+                                                        <td className="p-3.5 text-right font-bold text-lg text-red-800">{formatEur(totalDesvio)}</td>
+                                                    </tr>
                                                 );
                                             })}
-                                        </div>
-                                    ) : (
-                                        <div className="p-8 text-center bg-white rounded border border-dashed border-zinc-200 shadow-sm">
-                                            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">No se han registrado incidencias de registro para esta semana.</p>
-                                        </div>
-                                    )}
+                                            {resumenFaltasList.length === 0 && (
+                                                <tr>
+                                                    <td colSpan="4" className="p-8 text-center text-zinc-400 bg-white">
+                                                        No se han registrado incidencias de registro para esta jornada.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
                                 
                                 <div className="p-4 border-t border-zinc-200 bg-zinc-50 text-[11px] text-zinc-500 flex items-start gap-2">
                                     <AlertCircle className="w-4 h-4 text-zinc-400 flex-shrink-0 mt-0.5" />
                                     <span>
-                                        Nota de Auditoría: Se registran <strong className="text-zinc-700">{trabajadoresConIncidencias}</strong> operarios con partes de trabajo incompletos. Cada jornada laboral laborable sin imputación de horas genera un desvío estimado de 168€ (equivalente a 8 horas de producción no reportadas por operario).
+                                        Nota de Auditoría: Se registran <strong className="text-zinc-700">{trabajadoresConIncidencias}</strong> operarios sin parte de trabajo registrado en esta jornada. Cada ausencia de registro diario genera un desvío estimado de 168€ (equivalente a 8 horas de producción no reportadas por operario).
                                     </span>
                                 </div>
                             </div>
